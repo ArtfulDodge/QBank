@@ -99,6 +99,47 @@ class QBank:
 		else:
 			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
 	
+	def withdraw(self, mc_name, n_blocks=0, n_ingots=0, n_scrap=0, d_blocks=0, d=0):
+		transaction_type = "withdrawal"
+		uuid = self.get_player_uuid(mc_name)
+		if (self.account_exists(uuid)):
+			query = "SELECT account_id, netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE mc_uuid = %s"
+			data = [uuid]
+			self.cursor.execute(query, data)
+			record = self.cursor.fetchone()
+			id = record[0]
+			pre_n_blocks = record[1]
+			pre_n_ingots = record[2]
+			pre_n_scrap = record[3]
+			pre_d_blocks = record[4]
+			pre_d = record[5]
+			
+			post_n_blocks = pre_n_blocks - n_blocks
+			post_n_ingots = pre_n_ingots - n_ingots
+			while post_n_ingots < 0:
+				post_n_blocks -= 1
+				post_n_ingots += 9
+			post_n_scrap = pre_n_scrap - n_scrap
+			while post_n_scrap < 0:
+				post_n_ingots -= 1
+				post_n_scrap += 4
+			post_d_blocks = pre_d_blocks - d_blocks
+			post_d = pre_d - d
+			while post_d < 0:
+				post_d_blocks -= 1
+				post_d += 9
+			
+			if post_n_blocks < 0 or post_n_ingots < 0 or post_d_blocks < 0:
+				raise InsufficientFundsError(f"{mc_name} has insufficient funds for the transaction")
+			else:
+				self.create_transaction(transaction_type, sender_id = id, net_blocks = n_blocks, net_ingots = n_ingots, net_scrap = n_scrap, dia_blocks = d_blocks, dia = d)
+				query = "UPDATE accounts SET netherite_blocks = %s, netherite_ingots = %s, netherite_scrap = %s, diamond_blocks = %s, diamonds = %s WHERE account_id = %s"
+				data = (post_n_blocks, post_n_ingots, post_n_scrap, post_d_blocks, post_d, id)
+				self.cursor.execute(query, data)
+				self.db.commit()
+		else:
+			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
+	
 	def get_player_uuid(self, mc_name):
 		player = GetPlayerData(mc_name)
 		
@@ -124,4 +165,5 @@ try:
 except DuplicateAccountError as e:
 	print(e)
 
-qb.deposit("Queueue_", n_blocks = 3, n_ingots = 30, n_scrap = 15, d_blocks = 1, d = 40)
+qb.deposit("Queueue_", n_blocks = 6, n_ingots = 6, n_scrap = 3, d_blocks = 5, d = 6)
+qb.withdraw("Queueue_", n_blocks = 6, n_ingots = 6, n_scrap = 3, d_blocks = 5, d = 7)

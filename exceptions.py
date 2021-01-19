@@ -4,5 +4,8 @@ class AccountNotFoundError(Exception):
 class DuplicateAccountError(Exception):
 	pass
 
+class InsufficientFundsError(Exception):
+	pass
+
 class InvalidPlayerError(Exception):
 	pass
