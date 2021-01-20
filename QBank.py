@@ -140,6 +140,21 @@ class QBank:
 		else:
 			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
 	
+	def check_balance_mc_name(self, mc_name):
+		uuid = get_player_uuid(mc_name)
+		query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE mc_uuid = %s"
+		data = [uuid]
+		self.cursor.execute(query, data)
+		record = self.cursor.fetchone()
+		return record
+	
+	def check_balance_dc_id(self, dc_id):
+		query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE dc_id = %s"
+		data = [dc_id]
+		self.cursor.execute(query, data)
+		record = self.cursor.fetchone()
+		return record
+	
 	def get_player_uuid(self, mc_name):
 		player = GetPlayerData(mc_name)
 		
