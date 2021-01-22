@@ -152,6 +152,9 @@ async def deposit(ctx, *args):
 		qb.deposit(mc_name, amount)
 		amount_string = get_amount_as_string(amount)
 		await ctx.send(f"Deposited **{amount_string}** into the account belonging to {mc_name}")
+		recipient_dc_id = qb.get_dc_id_from_username(mc_name)
+		recipient = await bot.fetch_user(int(recipient_dc_id))
+		await recipient.send(f"{amount_string} has been deposited into your account")
 	except Exception as e:
 		await ctx.send(e)
 
@@ -165,6 +168,9 @@ async def withdraw(ctx, *args):
 		qb.withdraw(mc_name, amount)
 		amount_string = get_amount_as_string(amount)
 		await ctx.send(f"Withdrew **{amount_string}** from the account belonging to {mc_name}")
+		recipient_dc_id = qb.get_dc_id_from_username(mc_name)
+		recipient = await bot.fetch_user(int(recipient_dc_id))
+		await recipient.send(f"{amount_string} has been withdrawn from your account")
 	except Exception as e:
 		await ctx.send(e)
 
