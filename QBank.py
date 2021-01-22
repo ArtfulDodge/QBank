@@ -83,18 +83,21 @@ class QBank:
 		"""Creates a new account with the provided information
 		"""
 		mc_uuid = self.get_player_uuid(mc_name)
-		if not self.account_exists_mc_uuid(mc_uuid) and not self.account_exists_dc_id(dc_id):
-			query = "INSERT INTO accounts (mc_uuid, mc_name, dc_id) VALUES (%s, %s, %s)"
-			values = [mc_uuid, mc_name, dc_id]
-			self.cursor.execute(query, values)
-			self.db.commit()
+		if not self.account_exists_mc_uuid(mc_uuid):
+			if not self.account_exists_dc_id(dc_id):
+				query = "INSERT INTO accounts (mc_uuid, mc_name, dc_id) VALUES (%s, %s, %s)"
+				values = [mc_uuid, mc_name, dc_id]
+				self.cursor.execute(query, values)
+				self.db.commit()
 			
-			if not all(i == 0 for i in starting_balance):
-				self.deposit(mc_name, starting_balance)
+				if not all(i == 0 for i in starting_balance):
+					self.deposit(mc_name, starting_balance)
 			
-			return True
+				return True
+			else:
+				raise DuplicateAccountError("An account associated with your discord id already exists")
 		else:
-			raise DuplicateAccountError(f"User already has an account")
+			raise DuplicateAccountError(f"User {mc_name} already has an account")
 		return False
 		
 	def deposit(self, mc_name, amount=[0,0,0,0,0]):
@@ -125,7 +128,7 @@ class QBank:
 		except InsufficientFundsError:
 			raise InsufficientFundsError(f"{mc_name} has insufficient funds for this transaction")
 	
-	def client_transfer(self, sender_dc_id=0, recipient_mc_name=0, amount=(0,0,0,0,0)):
+	def client_transfer(self, sender_dc_id, recipient_mc_name, amount=(0,0,0,0,0)):
 		"""Transfers the provided amount from the sender's account to the recipient's account, intended for client use through bot command
 		"""
 		transaction_type = "transfer"
@@ -219,6 +222,12 @@ class QBank:
 		record = list(list(self.cursor.fetchone()))
 		return record
 	
+	#def get_recent_transactions(self, dc_id):
+	#	"""Returns a list of the 5 most recent transactions on the account associated with the discord id
+	#	"""
+	#	account_id = get_account_id_from_dc_id(dc_id)
+	#	query = "SELECT * FROM transactions WHERE sender_account_id = %s OR recipient_account_id = %s
+	
 	def get_account_id_from_mc_name(self, mc_name):
 		"""Returns the account id for the account associated with the given Minecraft name
 		"""
@@ -242,7 +251,7 @@ class QBank:
 			record = list(self.cursor.fetchone())
 			return record[0]
 		else:
-			raise AccountNotFoundError(f"Found no account associated with dicord id {dc_id}")
+			raise AccountNotFoundError(f"Found no account associated your discord id")
 	
 	def get_player_uuid(self, mc_name):
 		"""Returns the uuid for the given Minecraft player, raises an exception if invalid
@@ -253,6 +262,31 @@ class QBank:
 			return player.uuid
 		else:
 			raise InvalidPlayerError(f"No UUID for player with name {mc_name}")
+	
+	def get_player_name(self, dc_id):
+		"""Returns the Minecraft username for the owner of the account associated with the given discord id
+		"""
+		if (self.account_exists_dc_id(dc_id)):
+			query = "SELECT mc_name FROM accounts WHERE dc_id = %s"
+			data = [dc_id]
+			self.cursor.execute(query, data)
+			record = list(self.cursor.fetchone())
+			return record[0]
+		else:
+			raise AccountNotFoundError(f"Found no account associated with your discord id")
+	
+	def get_dc_id_from_username(self, mc_name):
+		"""Returns the discord id for the owner of the account associated with the given Minecraft username
+		"""
+		uuid = self.get_player_uuid(mc_name)
+		if (self.account_exists_mc_uuid(uuid)):
+			query = "SELECT dc_id FROM accounts WHERE mc_name = %s"
+			data = [mc_name]
+			self.cursor.execute(query, data)
+			record = list(self.cursor.fetchone())
+			return record[0]
+		else:
+			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
 		
 	def update_balance(self, account_id, new_balance=[0,0,0,0,0]):
 		"""Sets the provided account's balance to the provided amount
