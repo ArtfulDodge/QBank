@@ -13,7 +13,7 @@ class QBank:
 		"""Creates a new QBank object
 	
 		Connects to the MySQL server with the host and credentials given in .env
-		Creates the accounts and transactions tables if they don't already exist
+		Creates the accounts, transactions, and loans tables if they don't already exist
 		"""
 		load_dotenv()
 		try:
@@ -43,7 +43,8 @@ class QBank:
 								netherite_ingots INT UNSIGNED DEFAULT 0, 
 								netherite_scrap INT UNSIGNED DEFAULT 0, 
 								diamond_blocks INT UNSIGNED DEFAULT 0, 
-								diamonds INT UNSIGNED DEFAULT 0)""")
+								diamonds INT UNSIGNED DEFAULT 0
+								opted_into_interest BOOLEAN DEFAULT FALSE)""")
 		
 		if not any("transactions" in s for s in tables):
 			self.cursor.execute("""CREATE TABLE transactions (
@@ -56,6 +57,22 @@ class QBank:
 								netherite_scrap INT UNSIGNED, 
 								diamond_blocks INT UNSIGNED, 
 								diamonds INT UNSIGNED)""")
+		
+		if not any("loans" in s for s in tables):
+			self.cursor.execute("""CREATE TABLE loans (
+								loan_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+								loanee_id INT(11),
+								loanee_name INT(11),
+								total_nb INT UNSIGNED DEFAULT 0,
+								total_ni INT UNSIGNED DEFAULT 0,
+								total_ns INT UNSIGNED DEFAULT 0,
+								total_db INT UNSIGNED DEFAULT 0,
+								total_d INT UNSIGNED DEFAULT 0,
+								outstanding_nb INT UNSIGNED DEFAULT 0,
+								outstanding_ni INT UNSIGNED DEFAULT 0,
+								outstanding_ns INT UNSIGNED DEFAULT 0,
+								outstanding_db INT UNSIGNED DEFAULT 0,
+								outstanding_d INT UNSIGNED DEFAULT 0)""")
 		
 	def account_exists_mc_uuid(self, uuid):
 		"""Checks if the database contains an account with the given uuid
