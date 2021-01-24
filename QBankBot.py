@@ -135,6 +135,9 @@ async def requestdeposit(ctx, *args):
 		amount = build_amount_list(args)
 		amount_string = get_amount_as_string(amount)
 	
+		if amount == [0,0,0,0,0]:
+			raise ValueError()
+	
 	try:
 		mc_name = qb.get_player_name(dc_id)
 		manager = await bot.fetch_user(int(MANAGER_ID))
