@@ -49,6 +49,29 @@ def get_amount_as_string(amount):
 		
 	return result
 
+def format_transactions(transactions):
+	trans = list(transactions)
+	
+	result = "```Transaction ID      Transaction Type    Sender              Recipient           Amount\n"
+	for transaction in trans:
+		transaction = list(transaction)
+		amount_list = transaction[4:]
+		amount_string = get_amount_as_string(amount_list)
+		
+		tran = transaction[0:4]
+		if tran[2]:
+			tran[2] = qb.get_player_name_from_account_id(tran[2])
+		
+		if tran[3]:
+			tran[3] = qb.get_player_name_from_account_id(tran[3])
+		
+		for string in tran:
+			result += str(string).ljust(20)
+		
+		result += amount_string.ljust(20)
+		result += "\n"
+	result += "```"
+	return result
 
 @bot.event
 async def on_ready():
@@ -67,7 +90,7 @@ async def on_command_error(ctx, error):
 		await ctx.send(error)
 		raise error
 	
-@bot.command(help='Shows a message explaining how to denote currency')
+@bot.command(help='Shows a message explaining how to denote currency',aliases=['ch'])
 async def currencyhelp(ctx):
 	await ctx.send("```This bot distinguishes between different currencies by using a suffix appended to the amount you give it:\n"
 			 "nb = netherite blocks\nni = netherite ingots\nns = netherite scrap\ndb = diamond blocks\nd = diamonds\n\n"
@@ -90,7 +113,7 @@ async def createaccount(ctx, minecraft_username):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help='Checks your balance for you')
+@bot.command(help='Checks your balance for you', aliases=['cb'])
 async def checkbalance(ctx):
 	dc_id = ctx.message.author.id
 	
@@ -102,11 +125,15 @@ async def checkbalance(ctx):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help='DMs Queueue_ that you would like to make a deposit\nUsage: q!requestdeposit {amount}')
+@bot.command(help='DMs Queueue_ that you would like to make a deposit\nUsage: q!requestdeposit {amount}', aliases=['rd'])
 async def requestdeposit(ctx, *args):
 	dc_id = ctx.message.author.id
-	amount = build_amount_list(args)
-	amount_string = get_amount_as_string(amount)
+	if not args:
+		amount = [0,0,0,0,0]
+		amount_string = 'Unspecified amount'
+	else:
+		amount = build_amount_list(args)
+		amount_string = get_amount_as_string(amount)
 	
 	try:
 		mc_name = qb.get_player_name(dc_id)
@@ -116,11 +143,15 @@ async def requestdeposit(ctx, *args):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help='DMs Queueue_ that you would like to make a withdrawal\nUsage: q!requestwithdrawal {amount}')
+@bot.command(help='DMs Queueue_ that you would like to make a withdrawal\nUsage: q!requestwithdrawal {amount}', aliases=['rw'])
 async def requestwithdrawal(ctx, *args):
 	dc_id = ctx.message.author.id
-	amount = build_amount_list(args)
-	amount_string = get_amount_as_string(amount)
+	if not args:
+		amount = [0,0,0,0,0]
+		amount_string = 'Unspecified amount'
+	else:
+		amount = build_amount_list(args)
+		amount_string = get_amount_as_string(amount)
 	
 	try:
 		mc_name = qb.get_player_name(dc_id)
@@ -130,7 +161,7 @@ async def requestwithdrawal(ctx, *args):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help="Pays another player\nUsage: q!pay {Recipient's Minecraft username} {amount}")
+@bot.command(help="Pays another player\nUsage: q!pay {Recipient's Minecraft username} {amount}", aliases=['p'])
 async def pay(ctx, recipient_minecraft_username, *args):
 	sender_id = ctx.message.author.id
 	recipient_name = recipient_minecraft_username
@@ -146,8 +177,27 @@ async def pay(ctx, recipient_minecraft_username, *args):
 		await recipient.send(f"{sender_name} has paid you {amount_string}!")
 	except Exception as e:
 		await ctx.send(e)
-	
 
+@bot.command(help="DMs you your 5 most recent transactions", aliases=['rt'])
+async def recenttransactions(ctx):
+	dc_id = ctx.message.author.id
+	user = ctx.message.author
+	transactions = qb.get_recent_transactions(dc_id)
+	transactions_string = format_transactions(transactions)
+	
+	await user.send(f"Your recent transactions:\n{transactions_string}")
+	await ctx.send("Your recent transactions have been DMed to you")
+
+@bot.command(help="DMs you a list of all of your past transactions", aliases=['t'])
+async def transactions(ctx):
+	dc_id = ctx.message.author.id
+	user = ctx.message.author
+	transactions = qb.get_transactions(dc_id)
+	transactions_string = format_transactions(transactions)
+	
+	await user.send(f"Your recent transactions:\n{transactions_string}")
+	await ctx.send("Your transactions have been DMed to you")
+	
 @bot.command(help='Can only be used by Queueue_')
 @commands.is_owner()
 async def createaccountwithbalance(ctx, *args):
@@ -162,7 +212,7 @@ async def createaccountwithbalance(ctx, *args):
 	except DuplicateAccountError as e:
 		await ctx.send(e)
 
-@bot.command(help='Can only be used by Queueue_')
+@bot.command(help='Can only be used by Queueue_', aliases=['d'])
 @commands.is_owner()
 async def deposit(ctx, *args):
 	mc_name = args[0]
@@ -178,7 +228,7 @@ async def deposit(ctx, *args):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help='Can only be used by Queueue_')
+@bot.command(help='Can only be used by Queueue_', aliases=['w'])
 @commands.is_owner()
 async def withdraw(ctx, *args):
 	mc_name = args[0]
@@ -194,7 +244,7 @@ async def withdraw(ctx, *args):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help='Can only be used by Queueue_')
+@bot.command(help='Can only be used by Queueue_', aliases=['transfer'])
 @commands.is_owner()
 async def transferfunds(ctx, *args):
 	sender_name = args[0]

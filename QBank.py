@@ -219,14 +219,34 @@ class QBank:
 		query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE account_id = %s"
 		data = [account_id]
 		self.cursor.execute(query, data)
-		record = list(list(self.cursor.fetchone()))
+		record = list(self.cursor.fetchone())
 		return record
 	
-	#def get_recent_transactions(self, dc_id):
-	#	"""Returns a list of the 5 most recent transactions on the account associated with the discord id
-	#	"""
-	#	account_id = get_account_id_from_dc_id(dc_id)
-	#	query = "SELECT * FROM transactions WHERE sender_account_id = %s OR recipient_account_id = %s
+	def get_recent_transactions(self, dc_id):
+		"""Returns a list of the 5 most recent transactions on the account associated with the discord id, or all if there are <5 transactions
+		"""
+		account_id = self.get_account_id_from_dc_id(dc_id)
+		query = "SELECT * FROM transactions WHERE sender_account_id = %s OR recipient_account_id = %s"
+		data = [account_id, account_id]
+		self.cursor.execute(query, data)
+		records = self.cursor.fetchall()
+		
+		length = len(records)
+		if length > 5:
+			return records[-5:]
+		else:
+			return records
+	
+	def get_transactions(self, dc_id):
+		"""Returns a list of all the transactions on the account associated with the discord id
+		"""
+		account_id = self.get_account_id_from_dc_id(dc_id)
+		query = "SELECT * FROM transactions WHERE sender_account_id = %s OR recipient_account_id = %s"
+		data = [account_id, account_id]
+		self.cursor.execute(query, data)
+		records = self.cursor.fetchall()
+		
+		return records
 	
 	def get_account_id_from_mc_name(self, mc_name):
 		"""Returns the account id for the account associated with the given Minecraft name
@@ -287,6 +307,15 @@ class QBank:
 			return record[0]
 		else:
 			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
+	
+	def get_player_name_from_account_id(self, account_id):
+		"""Returns the Minecraft username of the owner of the account with the given id
+		"""
+		query = "SELECT mc_name FROM accounts WHERE account_id = %s"
+		data = [account_id]
+		self.cursor.execute(query, data)
+		record = list(self.cursor.fetchone())
+		return record[0]
 		
 	def update_balance(self, account_id, new_balance=[0,0,0,0,0]):
 		"""Sets the provided account's balance to the provided amount

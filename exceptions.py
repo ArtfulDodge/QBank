@@ -9,3 +9,6 @@ class InsufficientFundsError(Exception):
 
 class InvalidPlayerError(Exception):
 	pass
+
+class NoTransactionsError(Exception):
+	pass

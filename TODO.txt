@@ -1,0 +1,10 @@
+# Error messages when commands are used incorrectly
+# DM balance checks
+# Fix 0 balance check bug
+
+# Shortened commands
+# Request deposit/withdrawals with no specified amount
+# Transaction history viewing
+
+- Interest rates
+- Loans
