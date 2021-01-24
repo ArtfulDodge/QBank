@@ -211,7 +211,7 @@ class QBank:
 			record = list(self.cursor.fetchone())
 			return record
 		else:
-			raise AccountNotFoundError(f"Found no account associated with dicord id {dc_id}")
+			raise AccountNotFoundError(f"Found no account associated with your discord id")
 	
 	def check_balance_account_id(self, account_id):
 		"""Returns a list containing the balance for the account associated with the given account id

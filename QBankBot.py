@@ -28,19 +28,25 @@ def build_amount_list(args):
 	return result
 
 def get_last_nonzero_index(amount):
-	return [i for i, e in enumerate(amount) if e != 0][-1]
+	try:
+		return [i for i, e in enumerate(amount) if e != 0][-1]
+	except IndexError as e:
+		return -1
 
 def get_amount_as_string(amount):
 	result = ""
 	last_nonzero = get_last_nonzero_index(amount)
-
-	for i in range(5):
-		if amount[i] != 0:
-			if i < last_nonzero:
-				result += str(amount[i]) + suffixes[i] + ", "
-			else:
-				result += str(amount[i]) + suffixes[i]
 	
+	if last_nonzero != -1:
+		for i in range(5):
+			if amount[i] != 0:
+				if i < last_nonzero:
+					result += str(amount[i]) + suffixes[i] + ", "
+				else:
+					result += str(amount[i]) + suffixes[i]
+	else:
+		result = "0nb, 0ni, 0ns, 0db, 0d"
+		
 	return result
 
 
@@ -48,6 +54,18 @@ def get_amount_as_string(amount):
 async def on_ready():
 	print(f'{bot.user} has connected to Discord!')
 	await bot.change_presence(activity=discord.Game(name="q!help"))
+
+@bot.event
+async def on_command_error(ctx, error):
+	if isinstance(error, commands.CommandNotFound):
+		await ctx.send("Command not found, use q!help for a list of valid commands")
+	elif isinstance(error, commands.CommandInvokeError) and isinstance(error.original, ValueError):
+		await ctx.send("Invalid amount, make sure there is no space between the number and the suffix and that you have made no other typos. For help on how to denote currency use q!currencyhelp")
+	elif isinstance(error, commands.CommandInvokeError) and isinstance(error.original, IndexError):
+		await ctx.send(f"Missing argument(s). For correct usage use q!help {ctx.invoked_with}")
+	else:
+		await ctx.send(error)
+		raise error
 	
 @bot.command(help='Shows a message explaining how to denote currency')
 async def currencyhelp(ctx):
@@ -69,7 +87,7 @@ async def createaccount(ctx, minecraft_username):
 	try:
 		qb.create_new_account(mc_name, dc_id)
 		await ctx.send(f"Created a new account for user {mc_name}")
-	except DuplicateAccountError as e:
+	except Exception as e:
 		await ctx.send(e)
 
 @bot.command(help='Checks your balance for you')
@@ -78,7 +96,9 @@ async def checkbalance(ctx):
 	
 	try:
 		balance = get_amount_as_string(qb.check_balance_dc_id(dc_id))
-		await ctx.send(f"Your balance is:\n```{balance}```")
+		user = await bot.fetch_user(int(dc_id))
+		await user.send(f"Your balance is:\n```{balance}```")
+		await ctx.send("Your balance has been DMed to you")
 	except Exception as e:
 		await ctx.send(e)
 
@@ -111,10 +131,10 @@ async def requestwithdrawal(ctx, *args):
 		await ctx.send(e)
 
 @bot.command(help="Pays another player\nUsage: q!pay {Recipient's Minecraft username} {amount}")
-async def pay(ctx, *args):
+async def pay(ctx, recipient_minecraft_username, *args):
 	sender_id = ctx.message.author.id
-	recipient_name = args[0]
-	amount = build_amount_list(args[1:])
+	recipient_name = recipient_minecraft_username
+	amount = build_amount_list(args)
 	amount_string = get_amount_as_string(amount)
 	
 	try:
