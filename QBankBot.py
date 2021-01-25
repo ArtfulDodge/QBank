@@ -115,7 +115,7 @@ async def createaccount(ctx, minecraft_username):
 	except Exception as e:
 		await ctx.send(e)
 
-@bot.command(help='Checks your balance for you', aliases=['cb'])
+@bot.command(help='Checks your balance for you', aliases=['cb','balance','bal'])
 async def checkbalance(ctx):
 	dc_id = ctx.message.author.id
 	
