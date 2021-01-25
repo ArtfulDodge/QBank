@@ -343,6 +343,10 @@ class QBank:
 		self.cursor.execute(query, data)
 		self.db.commit()
 	
+	def get_loanable_amount(self):
+		result = [0,0,0,0,0]
+		total_outstanding = [0,0,0,0,0]
+	
 	def add_to_balance(self, balance=[0,0,0,0,0], amount=[0,0,0,0,0]):
 		"""Adds the provided amount to the provide balance and returns the new balance
 		"""

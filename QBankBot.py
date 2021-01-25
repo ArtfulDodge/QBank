@@ -101,6 +101,8 @@ async def currencyhelp(ctx):
 			 "will pay Queueue_ 10 netherite scrap, and ignore all other currency denominations\n\n"
 			 "Amounts that are high enough will automatically be converted to the next highest denomination.\n"
 			 "For example, 15ni will be automatically converted into 1 netherite block and 6 netherite ingots\n"
+			 "(This conversion also works in reverse when withdrawing, so if you have 0 netherite ingots but 1 netherite block,"
+			 "and withdraw 3ni, your block will be converted to 9 ingots and then the 3 ingots will be subtracted from that)"
 			 "This automatic conversion currently doesn't happen between diamonds and netherite, but eventually the bank will offer a set exchange rate for this.```")
 
 @bot.command(help='Creates a new account for you\nUsage: q!createaccount {your Minecraft username}')
