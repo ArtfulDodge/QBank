@@ -43,7 +43,7 @@ class QBank:
 								netherite_ingots INT UNSIGNED DEFAULT 0, 
 								netherite_scrap INT UNSIGNED DEFAULT 0, 
 								diamond_blocks INT UNSIGNED DEFAULT 0, 
-								diamonds INT UNSIGNED DEFAULT 0
+								diamonds INT UNSIGNED DEFAULT 0,
 								opted_into_interest BOOLEAN DEFAULT FALSE)""")
 		
 		if not any("transactions" in s for s in tables):
@@ -63,16 +63,22 @@ class QBank:
 								loan_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 								loanee_id INT(11),
 								loanee_name INT(11),
-								total_nb INT UNSIGNED DEFAULT 0,
-								total_ni INT UNSIGNED DEFAULT 0,
-								total_ns INT UNSIGNED DEFAULT 0,
-								total_db INT UNSIGNED DEFAULT 0,
-								total_d INT UNSIGNED DEFAULT 0,
+								loaned_nb INT UNSIGNED DEFAULT 0,
+								loaned_ni INT UNSIGNED DEFAULT 0,
+								loaned_ns INT UNSIGNED DEFAULT 0,
+								loaned_db INT UNSIGNED DEFAULT 0,
+								loaned_d INT UNSIGNED DEFAULT 0,
+								interest_nb INT UNSIGNED DEFAULT 0,
+								interest_ni INT UNSIGNED DEFAULT 0,
+								interest_ns INT UNSIGNED DEFAULT 0,
+								interest_db INT UNSIGNED DEFAULT 0,
+								interest_d INT UNSIGNED DEFAULT 0,
 								outstanding_nb INT UNSIGNED DEFAULT 0,
 								outstanding_ni INT UNSIGNED DEFAULT 0,
 								outstanding_ns INT UNSIGNED DEFAULT 0,
 								outstanding_db INT UNSIGNED DEFAULT 0,
-								outstanding_d INT UNSIGNED DEFAULT 0)""")
+								outstanding_d INT UNSIGNED DEFAULT 0,
+								paid BOOLEAN DEFAULT FALSE)""")
 		
 	def account_exists_mc_uuid(self, uuid):
 		"""Checks if the database contains an account with the given uuid
@@ -345,7 +351,37 @@ class QBank:
 	
 	def get_loanable_amount(self):
 		result = [0,0,0,0,0]
-		total_outstanding = [0,0,0,0,0]
+		total_interest = [0,0,0,0,0]
+		outstanding = [0,0,0,0,0]
+		
+		query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE opted_into_interest = TRUE"
+		self.cursor.execute(query)
+		balances = self.cursor.fetchall()
+		
+		for balance in balances:
+			for i in range(5):
+				result[i] += balance[i]
+		
+		query = "SELECT outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d FROM loans WHERE paid = FALSE"
+		self.cursor.execute(query)
+		outstanding_loans = self.cursor.fetchall()
+		
+		for loan in outstanding_loans:
+			for i in range(5):
+				outstanding[i] += loan[i]
+		
+		query = "SELECT interest_nb, interest_ni, interest_ns, interest_db, interest_d FROM loans WHERE paid = FALSE"
+		self.cursor.execute(query)
+		outstanding_interests = self.cursor.fetchall()
+		
+		for interest in outstanding_interests:
+			for i in range(5):
+				outstanding[i] -= loan[i]
+		
+		for i in range(5):
+			result[i] -= outstanding[i]
+		
+		return result
 	
 	def add_to_balance(self, balance=[0,0,0,0,0], amount=[0,0,0,0,0]):
 		"""Adds the provided amount to the provide balance and returns the new balance
