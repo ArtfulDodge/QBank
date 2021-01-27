@@ -1,6 +1,7 @@
 #QBank.py
 import os
 import discord
+import math
 import mysql.connector as mysql
 from mysql.connector import Error
 from dotenv import load_dotenv
@@ -41,10 +42,10 @@ class QBank:
 								dc_id VARCHAR(255), 
 								netherite_blocks INT UNSIGNED DEFAULT 0, 
 								netherite_ingots INT UNSIGNED DEFAULT 0, 
-								netherite_scrap INT UNSIGNED DEFAULT 0, 
+								netherite_scrap INT UNSIGNED DEFAULT 0,
 								diamond_blocks INT UNSIGNED DEFAULT 0, 
 								diamonds INT UNSIGNED DEFAULT 0,
-								opted_into_interest BOOLEAN DEFAULT FALSE)""")
+								opted_into_interest BOOLEAN DEFAULT TRUE)""")
 		
 		if not any("transactions" in s for s in tables):
 			self.cursor.execute("""CREATE TABLE transactions (
@@ -161,21 +162,24 @@ class QBank:
 		sender_balance = self.check_balance_dc_id(sender_dc_id)
 		recip_balance = self.check_balance_mc_name(recipient_mc_name)
 		
-		try:
-			sender_new_balance = self.subtract_from_balance(sender_balance, amount)
-			recip_new_balance = self.add_to_balance(recip_balance, amount)
-			
-			self.create_transaction(transaction_type, sender_account_id, recip_account_id, amount)
-			self.update_balance(sender_account_id, sender_new_balance)
-			self.update_balance(recip_account_id, recip_new_balance)
-		except InsufficientFundsError:
-			query = "SELECT mc_name FROM accounts WHERE account_id = %s"
-			data = [sender_account_id]
-			self.cursor.execute(query, data)
-			record = self.cursor.fetchone()
-			sender_mc_name = record[0]
-			
-			raise InsufficientFundsError(f"User {sender_mc_name} has insufficient funds for this transaction")
+		if sender_account_id != recip_account_id:
+			try:
+				sender_new_balance = self.subtract_from_balance(sender_balance, amount)
+				recip_new_balance = self.add_to_balance(recip_balance, amount)
+				
+				self.create_transaction(transaction_type, sender_account_id, recip_account_id, amount)
+				self.update_balance(sender_account_id, sender_new_balance)
+				self.update_balance(recip_account_id, recip_new_balance)
+			except InsufficientFundsError:
+				query = "SELECT mc_name FROM accounts WHERE account_id = %s"
+				data = [sender_account_id]
+				self.cursor.execute(query, data)
+				record = self.cursor.fetchone()
+				sender_mc_name = record[0]
+				
+				raise InsufficientFundsError(f"User {sender_mc_name} has insufficient funds for this transaction")
+		else:
+			raise Exception("Cannot pay yourself")
 	
 	def manager_transfer(self, sender_mc_name, recip_mc_name, amount=(0,0,0,0,0)):
 		"""Transfers the provided amount from the sender's account to the recipient's account, intended for bank manager use through bot command or code
@@ -244,6 +248,28 @@ class QBank:
 		self.cursor.execute(query, data)
 		record = list(self.cursor.fetchone())
 		return record
+	
+	def loan(self, mc_name, amount=[0,0,0,0,0]):
+		"""Loans the specified amount to the specified player
+		"""
+		uuid = self.get_player_uuid(mc_name)
+		interest = calculate_loan_interest(amount)
+		outstanding = [0,0,0,0,0]
+		
+		outstanding = self.add_to_balance(outstanding, amount)
+		outstanding = self.add_to_balance(outstanding, interest)
+		
+		account_id = self.get_account_id_from_mc_name(mc_name)
+		paid = all(i <= 0 for i in outstanding)
+		
+		if not paid:
+			self.deposit(mc_name, amount)
+			
+			query = "INSERT INTO loans (loanee_id, loanee_name, loaned_nb, loaned_ni, loaned_ns, loaned_db, loaned_n, interest_nb, interest_ni, interest_ns, interest_db, interest_d, outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+			data = [account_id, mc_name, amount[0], amount[1], amount[2], amount[3], amount[4], interest[0], interest[1], interest[2], interest[3], interest[4], outstanding[0], outstanding[1], outstanding[2], outstanding[3], outstanding[4]]
+			self.cursor.execute(query, data)
+			self.db.commit()
+			
 	
 	def get_recent_transactions(self, dc_id):
 		"""Returns a list of the 5 most recent transactions on the account associated with the discord id, or all if there are <5 transactions
@@ -350,6 +376,8 @@ class QBank:
 		self.db.commit()
 	
 	def get_loanable_amount(self):
+		"""Calculates the total amount the bank can currently loan out
+		"""
 		result = [0,0,0,0,0]
 		total_interest = [0,0,0,0,0]
 		outstanding = [0,0,0,0,0]
@@ -359,27 +387,48 @@ class QBank:
 		balances = self.cursor.fetchall()
 		
 		for balance in balances:
-			for i in range(5):
-				result[i] += balance[i]
+			result = self.add_to_balance(result, balance)
 		
 		query = "SELECT outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d FROM loans WHERE paid = FALSE"
 		self.cursor.execute(query)
 		outstanding_loans = self.cursor.fetchall()
 		
 		for loan in outstanding_loans:
-			for i in range(5):
-				outstanding[i] += loan[i]
+			outstanding = self.add_to_balance(outstanding, loan)
 		
 		query = "SELECT interest_nb, interest_ni, interest_ns, interest_db, interest_d FROM loans WHERE paid = FALSE"
 		self.cursor.execute(query)
 		outstanding_interests = self.cursor.fetchall()
 		
 		for interest in outstanding_interests:
-			for i in range(5):
-				outstanding[i] -= loan[i]
+			outstanding = self.subtract_from_balance(outstanding, interest)
 		
-		for i in range(5):
-			result[i] -= outstanding[i]
+		result = self.subtract_from_balance(result, outstanding)
+		
+		return result
+	
+	def calculate_loan_interest(self, amount=[0,0,0,0,0]):
+		"""Calculates the interest for the given amount
+		"""
+		result = [0,0,0,0,0]
+		
+		scrap_value = ((float(amount[0]) * 9.0) + float(amount[1])) * (2.0/9.0) % 1
+		
+		result[1] = math.floor(((float(amount[0]) * 9.0) + float(amount[1])) * (2.0/9.0))
+		result[2] = math.ceil(scrap_value / 0.25) + math.ceil(float(amount[2]) * (2.0/9.0))
+		result[4] = math.ceil(((float(amount[3]) * 9.0) + float(amount[4])) * (2.0/9.0))
+		result = self.add_to_balance(result)
+		
+		return result
+	
+	def calculate_balance_interest(self, amount=[0,0,0,0,0]):
+		"""Calculates the interest for the given amount
+		"""
+		result = [0,0,0,0,0]
+		
+		result[2] = math.floor(((float(amount[0] * 9) + float(amount[1])) * 1.0/18.0) + (float(amount[2]) * 1.0/72.0))
+		result[4] = math.floor((float(amount[3] * 9) + float(amount[4])) * 1.0/36.0)
+		result = self.add_to_balance(result)
 		
 		return result
 	
