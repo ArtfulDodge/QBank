@@ -83,6 +83,8 @@ async def on_ready():
 async def on_command_error(ctx, error):
 	if isinstance(error, commands.CommandNotFound):
 		await ctx.send("Command not found, use q!help for a list of valid commands")
+	elif isinstance(error, commands.MissingRequiredArgument):
+		await ctx.send(error)
 	elif isinstance(error, commands.CommandInvokeError) and isinstance(error.original, ValueError):
 		await ctx.send("Invalid amount; make sure there is no space between the number and the suffix, and that you have made no other typos. For help on how to denote currency use q!currencyhelp")
 	elif isinstance(error, commands.CommandInvokeError) and isinstance(error.original, IndexError):
@@ -91,6 +93,7 @@ async def on_command_error(ctx, error):
 		qb = QBank()
 		await ctx.send("Internal error, please try again")
 	else:
+		print("Got here")
 		await ctx.send(error)
 		raise error
 	
