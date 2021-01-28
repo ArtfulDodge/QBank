@@ -87,7 +87,7 @@ async def on_command_error(ctx, error):
 		await ctx.send("Invalid amount; make sure there is no space between the number and the suffix, and that you have made no other typos. For help on how to denote currency use q!currencyhelp")
 	elif isinstance(error, commands.CommandInvokeError) and isinstance(error.original, IndexError):
 		await ctx.send(f"Missing argument(s). For correct usage use q!help {ctx.invoked_with}")
-	elif isinstance(error, mysql.connector.errors.OperationalError):
+	elif isinstance(error, mysql.connector.errors.OperationalError) or isinstance(error.original, mysql.connector.errors.OperationalError):
 		qb = QBank()
 		await ctx.send("Internal error, please try again")
 	else:
@@ -113,23 +113,18 @@ async def currencyhelp(ctx):
 async def createaccount(ctx, minecraft_username):
 	mc_name = minecraft_username
 	dc_id = ctx.message.author.id
-	try:
-		qb.create_new_account(mc_name, dc_id)
-		await ctx.send(f"Created a new account for user {mc_name}")
-	except Exception as e:
-		await ctx.send(e)
+	
+	qb.create_new_account(mc_name, dc_id)
+	await ctx.send(f"Created a new account for user {mc_name}")
 
 @bot.command(help='Checks your balance for you', aliases=['cb','balance','bal'])
 async def checkbalance(ctx):
 	dc_id = ctx.message.author.id
 	
-	try:
-		balance = get_amount_as_string(qb.check_balance_dc_id(dc_id))
-		user = await bot.fetch_user(int(dc_id))
-		await user.send(f"Your balance is:\n```{balance}```")
-		await ctx.send("Your balance has been DMed to you")
-	except Exception as e:
-		await ctx.send(e)
+	balance = get_amount_as_string(qb.check_balance_dc_id(dc_id))
+	user = await bot.fetch_user(int(dc_id))
+	await user.send(f"Your balance is:\n```{balance}```")
+	await ctx.send("Your balance has been DMed to you")
 
 @bot.command(help='DMs Queueue_ that you would like to make a deposit\nUsage: q!requestdeposit {amount}', aliases=['rd'])
 async def requestdeposit(ctx, *args):
@@ -144,13 +139,11 @@ async def requestdeposit(ctx, *args):
 		if amount == [0,0,0,0,0]:
 			raise ValueError()
 	
-	try:
-		mc_name = qb.get_player_name(dc_id)
-		manager = await bot.fetch_user(int(MANAGER_ID))
-		await manager.send(f"**{mc_name}** requested a **DEPOSIT** of ```{amount_string}```\n ")
-		await ctx.send("Your request has been sent to the bank manager.")
-	except Exception as e:
-		await ctx.send(e)
+
+	mc_name = qb.get_player_name(dc_id)
+	manager = await bot.fetch_user(int(MANAGER_ID))
+	await manager.send(f"**{mc_name}** requested a **DEPOSIT** of ```{amount_string}```\n ")
+	await ctx.send("Your request has been sent to the bank manager.")
 
 @bot.command(help='DMs Queueue_ that you would like to make a withdrawal\nUsage: q!requestwithdrawal {amount}', aliases=['rw'])
 async def requestwithdrawal(ctx, *args):
@@ -162,13 +155,11 @@ async def requestwithdrawal(ctx, *args):
 		amount = build_amount_list(args)
 		amount_string = get_amount_as_string(amount)
 	
-	try:
-		mc_name = qb.get_player_name(dc_id)
-		manager = await bot.fetch_user(int(MANAGER_ID))
-		await manager.send(f"**{mc_name}** requested a **WITHDRAWAL** of: ```{amount_string}```\n ")
-		await ctx.send("Your request has been sent to the bank manager.")
-	except Exception as e:
-		await ctx.send(e)
+	mc_name = qb.get_player_name(dc_id)
+	manager = await bot.fetch_user(int(MANAGER_ID))
+	await manager.send(f"**{mc_name}** requested a **WITHDRAWAL** of: ```{amount_string}```\n ")
+	await ctx.send("Your request has been sent to the bank manager.")
+
 
 @bot.command(help="Pays another player\nUsage: q!pay {Recipient's Minecraft username} {amount}", aliases=['p'])
 async def pay(ctx, recipient_minecraft_username, *args):
@@ -177,15 +168,12 @@ async def pay(ctx, recipient_minecraft_username, *args):
 	amount = build_amount_list(args)
 	amount_string = get_amount_as_string(amount)
 	
-	try:
-		qb.client_transfer(sender_id, recipient_name, amount)
-		await ctx.send(f"**{amount_string}** has been transfered from your account to {recipient_name}'s account")
-		sender_name = qb.get_player_name(sender_id)
-		recipient_dc_id = qb.get_dc_id_from_username(recipient_name)
-		recipient = await bot.fetch_user(int(recipient_dc_id))
-		await recipient.send(f"{sender_name} has paid you {amount_string}!")
-	except Exception as e:
-		await ctx.send(e)
+	qb.client_transfer(sender_id, recipient_name, amount)
+	await ctx.send(f"**{amount_string}** has been transfered from your account to {recipient_name}'s account")
+	sender_name = qb.get_player_name(sender_id)
+	recipient_dc_id = qb.get_dc_id_from_username(recipient_name)
+	recipient = await bot.fetch_user(int(recipient_dc_id))
+	await recipient.send(f"{sender_name} has paid you {amount_string}!")
 
 @bot.command(help="DMs you your 5 most recent transactions", aliases=['rt'])
 async def recenttransactions(ctx):
@@ -215,11 +203,8 @@ async def createaccountwithbalance(ctx, *args):
 	
 	starting_balance = build_amount_list(args[2:])
 				
-	try:
-		qb.create_new_account(mc_name, dc_id, starting_balance)
-		await ctx.send(f"Created a new account for user {mc_name}")
-	except DuplicateAccountError as e:
-		await ctx.send(e)
+	qb.create_new_account(mc_name, dc_id, starting_balance)
+	await ctx.send(f"Created a new account for user {mc_name}")
 
 @bot.command(help='Can only be used by Queueue_', aliases=['d'])
 @commands.is_owner()
@@ -227,15 +212,12 @@ async def deposit(ctx, *args):
 	mc_name = args[0]
 	amount = build_amount_list(args[1:])
 	
-	try:
-		qb.deposit(mc_name, amount)
-		amount_string = get_amount_as_string(amount)
-		await ctx.send(f"Deposited **{amount_string}** into the account belonging to {mc_name}")
-		recipient_dc_id = qb.get_dc_id_from_username(mc_name)
-		recipient = await bot.fetch_user(int(recipient_dc_id))
-		await recipient.send(f"{amount_string} has been deposited into your account")
-	except Exception as e:
-		await ctx.send(e)
+	qb.deposit(mc_name, amount)
+	amount_string = get_amount_as_string(amount)
+	await ctx.send(f"Deposited **{amount_string}** into the account belonging to {mc_name}")
+	recipient_dc_id = qb.get_dc_id_from_username(mc_name)
+	recipient = await bot.fetch_user(int(recipient_dc_id))
+	await recipient.send(f"{amount_string} has been deposited into your account")
 
 @bot.command(help='Can only be used by Queueue_', aliases=['w'])
 @commands.is_owner()
@@ -243,15 +225,12 @@ async def withdraw(ctx, *args):
 	mc_name = args[0]
 	amount = build_amount_list(args[1:])
 	
-	try:
-		qb.withdraw(mc_name, amount)
-		amount_string = get_amount_as_string(amount)
-		await ctx.send(f"Withdrew **{amount_string}** from the account belonging to {mc_name}")
-		recipient_dc_id = qb.get_dc_id_from_username(mc_name)
-		recipient = await bot.fetch_user(int(recipient_dc_id))
-		await recipient.send(f"{amount_string} has been withdrawn from your account")
-	except Exception as e:
-		await ctx.send(e)
+	qb.withdraw(mc_name, amount)
+	amount_string = get_amount_as_string(amount)
+	await ctx.send(f"Withdrew **{amount_string}** from the account belonging to {mc_name}")
+	recipient_dc_id = qb.get_dc_id_from_username(mc_name)
+	recipient = await bot.fetch_user(int(recipient_dc_id))
+	await recipient.send(f"{amount_string} has been withdrawn from your account")
 
 @bot.command(help='Can only be used by Queueue_', aliases=['transfer'])
 @commands.is_owner()
@@ -260,11 +239,8 @@ async def transferfunds(ctx, *args):
 	recipient_name = args[1]
 	amount = build_amount_list(args[2:])
 	amount_string = get_amount_as_string(amount)
-	
-	try:
-		cb.manager_transfer(sender_name, recipient_name, amount)
-		await ctx.send(f"**{amount_string}** has been transfered from {sender_name}'s account to {recipient_name}'s account")
-	except Exception as e:
-		await ctx.send(e)
+
+	cb.manager_transfer(sender_name, recipient_name, amount)
+	await ctx.send(f"**{amount_string}** has been transfered from {sender_name}'s account to {recipient_name}'s account")
 	
 bot.run(TOKEN)
