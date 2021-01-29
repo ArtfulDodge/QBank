@@ -89,11 +89,7 @@ async def on_command_error(ctx, error):
 		await ctx.send("Invalid amount; make sure there is no space between the number and the suffix, and that you have made no other typos. For help on how to denote currency use q!currencyhelp")
 	elif isinstance(error, commands.CommandInvokeError) and isinstance(error.original, IndexError):
 		await ctx.send(f"Missing argument(s). For correct usage use q!help {ctx.invoked_with}")
-	elif isinstance(error, mysql.connector.errors.OperationalError) or isinstance(error.original, mysql.connector.errors.OperationalError):
-		qb = QBank()
-		await ctx.send("Internal error, please try again")
 	else:
-		print("Got here")
 		await ctx.send(error)
 		raise error
 	
