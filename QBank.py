@@ -81,13 +81,17 @@ class QBank:
 								outstanding_d INT UNSIGNED DEFAULT 0,
 								paid BOOLEAN DEFAULT FALSE)""")
 		
+		self.db.close()
+		
 	def account_exists_mc_uuid(self, uuid):
 		"""Checks if the database contains an account with the given uuid
 		"""
+		self.open()
 		query = "SELECT account_id FROM accounts WHERE mc_uuid = %s"
 		data = [uuid]
 		self.cursor.execute(query, data)
 		record = self.cursor.fetchone()
+		self.close()
 		if not record:
 			return False
 		return True
@@ -95,10 +99,12 @@ class QBank:
 	def account_exists_dc_id(self, dc_id):
 		"""Checks if the database contains an account with the given discord id
 		"""
+		self.open()
 		query = "SELECT account_id FROM accounts WHERE dc_id = %s"
 		data = [dc_id]
 		self.cursor.execute(query, data)
 		record = self.cursor.fetchone()
+		self.close()
 		if not record:
 			return False
 		return True
@@ -109,10 +115,12 @@ class QBank:
 		mc_uuid = self.get_player_uuid(mc_name)
 		if not self.account_exists_mc_uuid(mc_uuid):
 			if not self.account_exists_dc_id(dc_id):
+				self.open()
 				query = "INSERT INTO accounts (mc_uuid, mc_name, dc_id) VALUES (%s, %s, %s)"
 				values = [mc_uuid, mc_name, dc_id]
 				self.cursor.execute(query, values)
 				self.db.commit()
+				self.close()
 			
 				if not all(i == 0 for i in starting_balance):
 					self.deposit(mc_name, starting_balance)
@@ -171,11 +179,13 @@ class QBank:
 				self.update_balance(sender_account_id, sender_new_balance)
 				self.update_balance(recip_account_id, recip_new_balance)
 			except InsufficientFundsError:
+				self.open()
 				query = "SELECT mc_name FROM accounts WHERE account_id = %s"
 				data = [sender_account_id]
 				self.cursor.execute(query, data)
 				record = self.cursor.fetchone()
 				sender_mc_name = record[0]
+				self.close()
 				
 				raise InsufficientFundsError(f"User {sender_mc_name} has insufficient funds for this transaction")
 		else:
@@ -199,31 +209,37 @@ class QBank:
 			self.update_balance(sender_account_id, sender_new_balance)
 			self.update_balance(recip_account_id, recip_new_balance)
 		except InsufficientFundsError:
+			self.open()
 			query = "SELECT mc_name FROM accounts WHERE account_id = %s"
 			data = [sender_account_id]
 			self.cursor.execute(query, data)
 			record = self.cursor.fetchone()
 			sender_mc_name = record[0]
+			self.close()
 			
 			raise InsufficientFundsError(f"User {sender_mc_name} has insufficient funds for this transaction")
 
 	def create_transaction(self, transaction_type, sender_id=None, recipient_id=None, transaction_amount=[0,0,0,0,0]):
 		"""Logs a transaction with the given information in the database
 		"""
+		self.open()
 		query = "INSERT INTO transactions (transaction_type, sender_account_id, recipient_account_id, netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
 		data = [transaction_type, sender_id, recipient_id] + transaction_amount
 		self.cursor.execute(query, tuple(data))
 		self.db.commit()
+		self.close()
 	
 	def check_balance_mc_name(self, mc_name):
 		"""Returns a list containing the balance for the account associated with the given Minecraft username
 		"""
 		uuid = self.get_player_uuid(mc_name)
 		if (self.account_exists_mc_uuid(uuid)):
+			self.open()
 			query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE mc_uuid = %s"
 			data = [uuid]
 			self.cursor.execute(query, data)
 			record = list(self.cursor.fetchone())
+			self.close()
 			return record
 		else:
 			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
@@ -232,10 +248,12 @@ class QBank:
 		"""Returns a list containing the balance for the account associated with the given Discord id
 		"""
 		if (self.account_exists_dc_id(dc_id)):
+			self.open()
 			query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE dc_id = %s"
 			data = [dc_id]
 			self.cursor.execute(query, data)
 			record = list(self.cursor.fetchone())
+			self.close()
 			return record
 		else:
 			raise AccountNotFoundError(f"Found no account associated with your discord id")
@@ -243,10 +261,12 @@ class QBank:
 	def check_balance_account_id(self, account_id):
 		"""Returns a list containing the balance for the account associated with the given account id
 		"""
+		self.open()
 		query = "SELECT netherite_blocks, netherite_ingots, netherite_scrap, diamond_blocks, diamonds FROM accounts WHERE account_id = %s"
 		data = [account_id]
 		self.cursor.execute(query, data)
 		record = list(self.cursor.fetchone())
+		self.close()
 		return record
 	
 	def loan(self, mc_name, amount=[0,0,0,0,0]):
@@ -265,20 +285,24 @@ class QBank:
 		if not paid:
 			self.deposit(mc_name, amount)
 			
+			self.open()
 			query = "INSERT INTO loans (loanee_id, loanee_name, loaned_nb, loaned_ni, loaned_ns, loaned_db, loaned_n, interest_nb, interest_ni, interest_ns, interest_db, interest_d, outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 			data = [account_id, mc_name, amount[0], amount[1], amount[2], amount[3], amount[4], interest[0], interest[1], interest[2], interest[3], interest[4], outstanding[0], outstanding[1], outstanding[2], outstanding[3], outstanding[4]]
 			self.cursor.execute(query, data)
 			self.db.commit()
+			self.close()
 			
 	
 	def get_recent_transactions(self, dc_id):
 		"""Returns a list of the 5 most recent transactions on the account associated with the discord id, or all if there are <5 transactions
 		"""
 		account_id = self.get_account_id_from_dc_id(dc_id)
+		self.open()
 		query = "SELECT * FROM transactions WHERE sender_account_id = %s OR recipient_account_id = %s"
 		data = [account_id, account_id]
 		self.cursor.execute(query, data)
 		records = self.cursor.fetchall()
+		self.close()
 		
 		length = len(records)
 		if length > 5:
@@ -290,11 +314,12 @@ class QBank:
 		"""Returns a list of all the transactions on the account associated with the discord id
 		"""
 		account_id = self.get_account_id_from_dc_id(dc_id)
+		self.open()
 		query = "SELECT * FROM transactions WHERE sender_account_id = %s OR recipient_account_id = %s"
 		data = [account_id, account_id]
 		self.cursor.execute(query, data)
 		records = self.cursor.fetchall()
-		
+		self.close()
 		return records
 	
 	def get_account_id_from_mc_name(self, mc_name):
@@ -302,10 +327,12 @@ class QBank:
 		"""
 		uuid = self.get_player_uuid(mc_name)
 		if (self.account_exists_mc_uuid(uuid)):
+			self.open()
 			query = "SELECT account_id FROM accounts WHERE mc_uuid = %s"
 			data = [uuid]
 			self.cursor.execute(query, data)
 			record = list(self.cursor.fetchone())
+			self.close()
 			return record[0]
 		else:
 			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
@@ -314,10 +341,12 @@ class QBank:
 		"""Returns the account id for the account associated with the given Discord id
 		"""
 		if (self.account_exists_dc_id(dc_id)):
+			self.open()
 			query = "SELECT account_id FROM accounts WHERE dc_id = %s"
 			data = [dc_id]
 			self.cursor.execute(query, data)
 			record = list(self.cursor.fetchone())
+			self.close()
 			return record[0]
 		else:
 			raise AccountNotFoundError(f"Found no account associated your discord id")
@@ -336,10 +365,12 @@ class QBank:
 		"""Returns the Minecraft username for the owner of the account associated with the given discord id
 		"""
 		if (self.account_exists_dc_id(dc_id)):
+			self.open()
 			query = "SELECT mc_name FROM accounts WHERE dc_id = %s"
 			data = [dc_id]
 			self.cursor.execute(query, data)
 			record = list(self.cursor.fetchone())
+			self.close()
 			return record[0]
 		else:
 			raise AccountNotFoundError(f"Found no account associated with your discord id")
@@ -349,10 +380,12 @@ class QBank:
 		"""
 		uuid = self.get_player_uuid(mc_name)
 		if (self.account_exists_mc_uuid(uuid)):
+			self.open()
 			query = "SELECT dc_id FROM accounts WHERE mc_name = %s"
 			data = [mc_name]
 			self.cursor.execute(query, data)
 			record = list(self.cursor.fetchone())
+			self.close()
 			return record[0]
 		else:
 			raise AccountNotFoundError(f"Found no account belonging to user {mc_name}")
@@ -360,24 +393,29 @@ class QBank:
 	def get_player_name_from_account_id(self, account_id):
 		"""Returns the Minecraft username of the owner of the account with the given id
 		"""
+		self.open()
 		query = "SELECT mc_name FROM accounts WHERE account_id = %s"
 		data = [account_id]
 		self.cursor.execute(query, data)
 		record = list(self.cursor.fetchone())
+		self.close()
 		return record[0]
 		
 	def update_balance(self, account_id, new_balance=[0,0,0,0,0]):
 		"""Sets the provided account's balance to the provided amount
 		"""
+		self.open()
 		query = "UPDATE accounts SET netherite_blocks = %s, netherite_ingots = %s, netherite_scrap = %s, diamond_blocks = %s, diamonds = %s WHERE account_id = %s"
 		data = new_balance.copy()
 		data.append(account_id)
 		self.cursor.execute(query, data)
 		self.db.commit()
+		self.close()
 	
 	def get_loanable_amount(self):
 		"""Calculates the total amount the bank can currently loan out
 		"""
+		self.open()
 		result = [0,0,0,0,0]
 		total_interest = [0,0,0,0,0]
 		outstanding = [0,0,0,0,0]
@@ -404,6 +442,8 @@ class QBank:
 			outstanding = self.subtract_from_balance(outstanding, interest)
 		
 		result = self.subtract_from_balance(result, outstanding)
+		
+		self.close()
 		
 		return result
 	
@@ -480,6 +520,7 @@ class QBank:
 	def update_player_names(self):
 		"""Looks up all players by uuid and updates their names if they have changed
 		"""
+		self.open()
 		query = "SELECT mc_name, mc_uuid FROM accounts"
 		self.cursor.execute(query)
 		records = self.cursor.fetchall()
@@ -496,5 +537,23 @@ class QBank:
 				self.cursor.execute(query, data)
 		
 		self.db.commit()
-			
+		self.close()
+	
+	def open(self):
+		try:
+			self.db = mysql.connect(
+				host = os.getenv('MYSQL_HOST'),
+				user = os.getenv('MYSQL_USER'),
+				passwd = os.getenv('MYSQL_PASSWORD'),
+				auth_plugin = os.getenv('AUTH_PLUGIN'),
+				database = os.getenv('DATABASE')
+			)
+			print(self.db)
+		except Error as e:
+			print(f"The error '{e}' occurred")
+	
+		self.cursor = self.db.cursor()
+	
+	def close(self):
+		self.db.close()
 	#end QBank
