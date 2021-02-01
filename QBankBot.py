@@ -93,6 +93,8 @@ async def on_command_error(ctx, error):
 		await ctx.send(error)
 		raise error
 	
+	qb.close()
+	
 @bot.command(help='Shows a message explaining how to denote currency',aliases=['ch'])
 async def currencyhelp(ctx):
 	await ctx.send("```This bot distinguishes between different currencies by using a suffix appended to the amount you give it:\n"
@@ -239,7 +241,13 @@ async def transferfunds(ctx, *args):
 	amount = build_amount_list(args[2:])
 	amount_string = get_amount_as_string(amount)
 
-	cb.manager_transfer(sender_name, recipient_name, amount)
+	qb.manager_transfer(sender_name, recipient_name, amount)
 	await ctx.send(f"**{amount_string}** has been transfered from {sender_name}'s account to {recipient_name}'s account")
+
+@bot.command(help='Updates Minecraft usernames in the database', aliases['un'])
+@commands.is_owner()
+async def updatenames(ctx):
+	qb.update_player_names()
+	await ctx.send("Names have been updated")
 	
 bot.run(TOKEN)

@@ -3,6 +3,7 @@ import os
 import discord
 import math
 import mysql.connector as mysql
+import datetime as dt
 from mysql.connector import Error
 from dotenv import load_dotenv
 from mcuuid.api import GetPlayerData
@@ -64,6 +65,8 @@ class QBank:
 								loan_id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
 								loanee_id INT(11),
 								loanee_name INT(11),
+								borrowed_date VARCHAR(20),
+								due_date VARCHAR(20),
 								loaned_nb INT UNSIGNED DEFAULT 0,
 								loaned_ni INT UNSIGNED DEFAULT 0,
 								loaned_ns INT UNSIGNED DEFAULT 0,
@@ -269,7 +272,7 @@ class QBank:
 		self.close()
 		return record
 	
-	def loan(self, mc_name, amount=[0,0,0,0,0]):
+	def loan(self, mc_name, amount=[0,0,0,0,0], days_before_due = 0):
 		"""Loans the specified amount to the specified player
 		"""
 		uuid = self.get_player_uuid(mc_name)
@@ -280,19 +283,85 @@ class QBank:
 		outstanding = self.add_to_balance(outstanding, interest)
 		
 		account_id = self.get_account_id_from_mc_name(mc_name)
+		if self.account_has_unpaid_loan(account_id):
+			raise MultipleLoansError("Cannot take out additional loans while you still have an unpaid loan")
+		
 		paid = all(i <= 0 for i in outstanding)
+		
+		borrowed_date = dt.datetime.now().date()
+		due_date = (borrowed_date + dt.timedelta(days=days_before_due)).date()
+		
+		borrowed_date_str = borrowed_date.strftime("%y/%m/%d")
+		due_date_str = due_date.strftime("%y/%m/%d")
 		
 		if not paid:
 			self.deposit(mc_name, amount)
 			
 			self.open()
-			query = "INSERT INTO loans (loanee_id, loanee_name, loaned_nb, loaned_ni, loaned_ns, loaned_db, loaned_n, interest_nb, interest_ni, interest_ns, interest_db, interest_d, outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-			data = [account_id, mc_name, amount[0], amount[1], amount[2], amount[3], amount[4], interest[0], interest[1], interest[2], interest[3], interest[4], outstanding[0], outstanding[1], outstanding[2], outstanding[3], outstanding[4]]
+			query = "INSERT INTO loans (loanee_id, loanee_name, borrowed_date, due_date, loaned_nb, loaned_ni, loaned_ns, loaned_db, loaned_n, interest_nb, interest_ni, interest_ns, interest_db, interest_d, outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+			data = [account_id, mc_name, borrowed_date_str, due_date_str, amount[0], amount[1], amount[2], amount[3], amount[4], interest[0], interest[1], interest[2], interest[3], interest[4], outstanding[0], outstanding[1], outstanding[2], outstanding[3], outstanding[4]]
 			self.cursor.execute(query, data)
 			self.db.commit()
 			self.close()
 			
+	def loan_payment_direct(self, dc_id, amount=[0,0,0,0,0]):
+		"""Makes a payment on a loan
+		"""
+		account_id = self.get_account_id_from_dc_id(dc_id)
+		balance = self.check_balance_account_id(account_id)
+		outstanding = self.get_outstanding_loan_balance(account_id)
+		
+		if not all(i >= 0 for i in amount):
+			raise ValueError("Can't pay a negative amount")
+		
+		if self.lessthan(outstanding, amount):
+			amount = outstanding
+		
+		balance = self.subtract_from_balance(balance, amount)
+		self.update_balance(account_id, balance)
+		
+		outstanding = self.subtract(outstanding, amount)
+		paid = all(i <= 0 for i in outstanding)
+		self.update_loan_balance(account_id, outstanding, paid)
 	
+	def loan_payment_indirect(self, mc_name):
+		"""Makes a payment on a loan
+		"""
+		account_id = self.get_account_id_from_mc_name(mc_name)
+		balance = self.check_balance_account_id(account_id)
+		outstanding = self.get_outstanding_loan_balance(account_id)
+		
+		if not all(i >= 0 for i in amount):
+			raise ValueError("Can't pay a negative amount")
+		
+		if self.lessthan(outstanding, amount):
+			amount = outstanding
+		
+		balance = self.subtract_from_balance(balance, amount)
+		self.update_balance(account_id, balance)
+		
+		outstanding = self.subtract(outstanding, amount)
+		paid = all(i <= 0 for i in outstanding)
+		self.update_loan_balance(account_id, outstanding, paid)
+	
+	def account_has_unpaid_loan(self, account_id):
+		"""Returns true if the account has any unpaid loans
+		"""
+		self.open()
+		query = "SELECT loan_id FROM loans WHERE loanee_id = %s AND paid = FALSE"
+		data = [account_id]
+		self.close()
+	
+	def get_outstanding_loan_balance(self, account_id):
+		self.open()
+		query = "SELECT oustanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d FROM loans WHERE loanee_id = %s AND paid = FALSE"
+		data = [account_id]
+		self.cursor.execute(query, data)
+		outstanding_balance = self.cursor.fetchone()
+		self.close()
+		
+		return outstanding_balance
+		
 	def get_recent_transactions(self, dc_id):
 		"""Returns a list of the 5 most recent transactions on the account associated with the discord id, or all if there are <5 transactions
 		"""
@@ -412,6 +481,16 @@ class QBank:
 		self.db.commit()
 		self.close()
 	
+	def update_loan_balance(self, account_id, new_outstanding_balance=[0,0,0,0,0], paid = False):
+		"""Sets the outstanding balance on the provided account's unpaid loans to the provided amount
+		"""
+		self.open()
+		query = "UPDATE loans SET outstanding_nb = %s, outstanding_ni = %s, outstanding_ns = %s, outstanding_db = %s, outstanding_d = %s, paid = %s WHERE loanee_id = %s AND paid = false"
+		data = [amount[0], amount[1], amount[2], amount[3], amount[4], paid, account_id]
+		self.cursor.execute(query, data)
+		self.db.commit()
+		self.close()
+	
 	def get_loanable_amount(self):
 		"""Calculates the total amount the bank can currently loan out
 		"""
@@ -425,23 +504,23 @@ class QBank:
 		balances = self.cursor.fetchall()
 		
 		for balance in balances:
-			result = self.add_to_balance(result, balance)
+			result = self.add(result, balance)
 		
 		query = "SELECT outstanding_nb, outstanding_ni, outstanding_ns, outstanding_db, outstanding_d FROM loans WHERE paid = FALSE"
 		self.cursor.execute(query)
 		outstanding_loans = self.cursor.fetchall()
 		
 		for loan in outstanding_loans:
-			outstanding = self.add_to_balance(outstanding, loan)
+			outstanding = self.add(outstanding, loan)
 		
 		query = "SELECT interest_nb, interest_ni, interest_ns, interest_db, interest_d FROM loans WHERE paid = FALSE"
 		self.cursor.execute(query)
 		outstanding_interests = self.cursor.fetchall()
 		
 		for interest in outstanding_interests:
-			outstanding = self.subtract_from_balance(outstanding, interest)
+			outstanding = self.subtract(outstanding, interest)
 		
-		result = self.subtract_from_balance(result, outstanding)
+		result = self.subtract(result, outstanding)
 		
 		self.close()
 		
@@ -517,6 +596,44 @@ class QBank:
 		else:
 			return result
 	
+	def add(self, amount=[0,0,0,0,0], add=[0,0,0,0,0]):
+		result = amount.copy()
+		for i in range(5):
+			result[i] += add[i]
+		
+		while result[4] >= 9:
+			result[4] -= 9
+			result[3] += 1
+		
+		while result[2] >= 4:
+			result[2] -= 4
+			result[1] += 1
+			
+		while result[1] >= 9:
+			result[1] -= 9
+			result[0] += 1
+		
+		return result
+		
+	def subtract(self, amount=[0,0,0,0,0], sub=[0,0,0,0,0]):
+		result = amount.copy()
+		for i in range(5):
+			result[i] -= sub[i]
+		
+		while result[1] < 0:
+			result[0] -= 1
+			result[1] += 9
+		
+		while result[2] < 0:
+			result[1] -= 1
+			result[2] += 4
+		
+		while result[4] < 0:
+			result[3] -= 1
+			result[4] += 9
+			
+		return result
+	
 	def update_player_names(self):
 		"""Looks up all players by uuid and updates their names if they have changed
 		"""
@@ -538,6 +655,14 @@ class QBank:
 		
 		self.db.commit()
 		self.close()
+	
+	def lessthan(self, amount1=[0,0,0,0,0], amount2=[0,0,0,0,0]):
+		"""Returns true if amount1 < amount2, false if amount1 >= amount2
+			DOES NOT WORK FOR NEGATIVE VALUES
+		"""
+		testlist = self.subtract(amount1, amount2)
+		result = all(i <= 0 for i in testlist)
+		return result
 	
 	def open(self):
 		try:

@@ -12,3 +12,6 @@ class InvalidPlayerError(Exception):
 
 class NoTransactionsError(Exception):
 	pass
+
+class MultipleLoansError(Exception):
+	pass
