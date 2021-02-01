@@ -244,7 +244,7 @@ async def transferfunds(ctx, *args):
 	qb.manager_transfer(sender_name, recipient_name, amount)
 	await ctx.send(f"**{amount_string}** has been transfered from {sender_name}'s account to {recipient_name}'s account")
 
-@bot.command(help='Updates Minecraft usernames in the database', aliases['un'])
+@bot.command(help='Updates Minecraft usernames in the database', aliases=['un'])
 @commands.is_owner()
 async def updatenames(ctx):
 	qb.update_player_names()
