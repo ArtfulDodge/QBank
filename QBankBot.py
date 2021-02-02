@@ -263,6 +263,20 @@ async def transferfunds(ctx, *args):
 	qb.manager_transfer(sender_name, recipient_name, amount)
 	await ctx.send(f"**{amount_string}** has been transfered from {sender_name}'s account to {recipient_name}'s account")
 
+@bot.commands(help='Can only be used by Queueue_', aliases=['l'])
+@commands.is_owner()
+async def loan(ctx, *args):
+	mc_name = args[0]
+	dc_id = qb.get_dc_id_from_username(mc_name)
+	user = await bot.fetch_user(int(dc_id))
+	amount = build_amount_list(args[1:len(args)-2])
+	amount_string = get_amount_as_string(amount)
+	days = args[len(args)-2]
+
+	qb.loan(mc_name, amount, days)
+	await ctx.send(f"**{amount_string}** has been loaned to {mc_name}")
+	await user.send(f"A loan of {amount_string} has been deposited into your account")
+
 @bot.command(help='Updates Minecraft usernames in the database', aliases=['un'])
 @commands.is_owner()
 async def updatenames(ctx):
