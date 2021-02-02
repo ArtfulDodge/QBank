@@ -195,7 +195,26 @@ async def transactions(ctx):
 	
 	await user.send(f"Your recent transactions:\n{transactions_string}")
 	await ctx.send("Your transactions have been DMed to you")
+
+@bot.command(helf='DMs Queueue_ that you would like to take out a loan\nUsage: q!requestloan {amount}', aliases=['rl'])
+async def requestloan(ctx, *args):
+	dc_id = ctx.message.author.id
+	if not args:
+		amount = [0,0,0,0,0]
+		amount_string = 'Unspecified amount'
+	else:
+		amount = build_amount_list(args)
+		amount_string = get_amount_as_string(amount)
 	
+		if amount == [0,0,0,0,0]:
+			raise ValueError()
+	
+
+	mc_name = qb.get_player_name(dc_id)
+	manager = await bot.fetch_user(int(MANAGER_ID))
+	await manager.send(f"**{mc_name}** requested a **LOAN** of ```{amount_string}```\n ")
+	await ctx.send("Your request has been sent to the bank manager.")
+
 @bot.command(help='Can only be used by Queueue_')
 @commands.is_owner()
 async def createaccountwithbalance(ctx, *args):
